@@ -1,0 +1,99 @@
+version: "3.3"
+services:
+
+  # FRONT END
+  # -------------------------------
+
+  nginx:
+    image: nginx:1.13-alpine
+    restart: always
+    ports:
+      - "${NGINX_PORT}:80"
+
+    volumes:
+      - "${ST_CONF_STORAGE}/nginx/nginx.conf:/etc/nginx/nginx.conf:ro"
+
+  # DATABASE FOR GRAFANA
+  # -------------------------------
+
+  postgres:
+    image: postgres:10-alpine
+    restart: always
+
+    ports:
+      - "33060:${POSTGRES_PORT_BACKEND}"
+
+    environment:
+      # security
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+
+      # settings
+      - POSTGRES_DB=grafana
+      - PGPORT=${POSTGRES_PORT_BACKEND}
+      - PGDATA=/var/lib/postgresql/data
+
+    volumes:
+      - "${ST_DATA_STORAGE}/postgres:/var/lib/postgresql/data"
+
+  # DATABASE FOR STATS
+  # -------------------------------
+
+  influxdb:
+    image: influxdb:1.5-alpine
+    restart: always
+
+    ports:
+      - "${INFLUX_PORT_API}:8086" # http api
+
+    environment:
+      # security
+      - INFLUXDB_DB=${INFLUX_DB}
+      - INFLUXDB_ADMIN_ENABLED=false
+      - INFLUXDB_ADMIN_USER=${INFLUX_ADMIN_USER}
+      - INFLUXDB_ADMIN_PASSWORD=${INFLUX_ADMIN_PASS}
+      - INFLUXDB_USER=${INFLUX_USER}
+      - INFLUXDB_USER_PASSWORD=${INFLUX_PASS}
+
+      # settings
+      - INFLUXDB_DATA_DIR=/var/lib/influxdb
+      - INFLUXDB_DATA_WAL_DIR=/var/lib/influxdb/wal
+      - INFLUXDB_HTTP_ENABLED=true
+      - INFLUXDB_HTTP_AUTH_ENABLED=false
+
+    volumes:
+      - "${ST_DATA_STORAGE}/influxdb:/var/lib/influxdb"
+
+  # BACKEND
+  # -------------------------------
+
+  grafana:
+    image: grafana/grafana:5.1.0
+    restart: always
+    user: "472" #472 - do not change
+
+    ports:
+      - "${GRAFANA_PORT_UI}:3000" # ui panel
+
+    environment:
+      # security
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_SECURITY_SECRET_KEY=${GRAFANA_SECRET_KEY}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_USERS_ORG_CREATE=false
+      - GF_AUTH.ANONYMOUS=false
+
+      # settings
+      - GF_SERVER_HTTP_PORT=3000
+      - GF_DATABASE_TYPE=postgres
+      - GF_DATABASE_HOST=postgres:${POSTGRES_PORT_BACKEND}
+      - GF_DATABASE_USER=${POSTGRES_USER}
+      - GF_DATABASE_PASSWORD=${POSTGRES_PASSWORD}
+
+    volumes:
+      - "${ST_DATA_STORAGE}/grafana:/var/lib/grafana"
+
+    depends_on:
+      - postgres
+      - influxdb
